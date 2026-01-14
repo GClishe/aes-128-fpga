@@ -5,6 +5,14 @@ def transpose(matrix: list[list]) -> list[list]:
 
     return [[col[i] for col in matrix] for i in range(len(matrix[0]))]
 
+def bytewise_XOR(b1: bytes, b2: bytes) -> bytes:
+    if len(b1) != len(b2):
+        raise ValueError("Words must be same length to XOR")
+    b1_list = list(b1)      # converts b1 to list of ints
+    b2_list = list(b2)      # converts b2 to list of ints
+    res_list = [b1_list[i] ^ b2_list[i] for i in range(len(b1))]    # XORS corresponding elements in b1, b2
+    return bytes(res_list)
+
 def left_rotate(word: bytes) -> bytes:
     expanded_word = list(word)                # expands word into list of its component bytes
     temp = expanded_word[1:]                  # moves all but the first element to the left
@@ -58,8 +66,8 @@ def g(word: bytes, round_num: int) -> bytes:
 
     RCON = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36]     # the first byte in the substituted word is then XOR'd with the value in the RCON table corresopnding to the round number
 
-    new_first_val = substituted_word[0] ^ RCON[round_num - 1]   # XORs first byte with RCON value
-    substituted_word[0] = new_first_val                         # replaces first byte with new value
+    new_first_val = substituted_word[0] ^ RCON[round_num - 1]               # XORs first byte with RCON value
+    substituted_word[0] = new_first_val                                     # replaces first byte with new value
     
     return bytes(substituted_word)      # converts substituted_word (list of ints) to a bytes object and returns. 
     
@@ -67,39 +75,32 @@ def g(word: bytes, round_num: int) -> bytes:
 
 def key_expansion(key: bytes) -> list:
     """
-    Docstring for key_expansion
+    Expand a 128-bit AES key into round keys.
+
+    Derives 11 round keys rqeuired for AES-128 key scheduling, including the initial round key (round 0).
     
-    :param key: Description
+    :param key: 16-byte AES-128 cipher key. 
     :type key: bytes
-    :return: Description
+    :return: List of 11 round keys, each a 16-byte 'bytes' object, ordered from round 0 through round 10
     :rtype: list
     """
     if len(key) != 16:
         raise ValueError("Key expansion failed. Key must be 16 bytes long for AES-128.")
 
-    words: list = [key[0:4], key[4:8], key[8:12], key[12:]]         # splits the key into four words, each four bytes long
+    words: list = [key[0:4], key[4:8], key[8:12], key[12:16]]         # splits the key into four words, each four bytes long
 
     # each round key is 4 words. W0 thru W3 is round 0 ... W40 thru W43 is round 10. We need 44 words for 10 rounds.
     # every fourth word goes thru a transformation "g" before being XOR'd
     for i in range(4,44):  
         if (i % 4 != 0):
-            nextWord = words[i-4] ^ words[i]
+            nextWord = bytewise_XOR(words[i-4], words[i-1])
             words.append(nextWord)
         else:
-            nextWord = words[i-4] ^ g(words[i-1])
+            nextWord = bytewise_XOR(words[i-4], g(words[i-1], i // 4))  # we XOR the i-4 word with g(w[i-1]). we use i // 4 to determine round number
             words.append(nextWord)
+    round_keys = [words[4*r : 4*r + 4] for r in range(11)]              # groups the words into sets of 4, with one set of words being one round key. round_keys is of type list(list(bytes))
 
-    return words
-
-
-# Plaintext and key are of type bytes
-# The bytes type is simply an array of bytes. For example: 
-
-# a: bytes = b"Test message"
-# b: str = "Test message"
-# print(a[0], b[0])
-# 
-# >>> 84 T 
+    return [b"".join(word for word in round) for round in round_keys]   # concatenates the 4 words in each round to form 11 rounds of 16-byte keys. return type is list(bytes)
 
 def aes_encrypt(plaintext: bytes, key: bytes) -> bytes:
     if len(key) != 16:
@@ -109,9 +110,3 @@ def aes_encrypt(plaintext: bytes, key: bytes) -> bytes:
     
     temp_matrix = [[plaintext[i] for i in range(j, j+3)] for j in range(0,3)]    # transforms the plaintext into a matrix [[b0, b1, b2,b3], [b4, ... ], ... ]
     matrix = transpose(temp_matrix)         # transposes matrix into correct format for AES algorithm
-
-word = b"\x3C\xA7\x00\xFF"
-
-print(left_rotate(word))
-print(list(left_rotate(word)))
-print(g(word, round_num=5))
