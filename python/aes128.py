@@ -13,14 +13,14 @@ def bytewise_XOR(b1: bytes, b2: bytes) -> bytes:
     res_list = [b1_list[i] ^ b2_list[i] for i in range(len(b1))]    # XORS corresponding elements in b1, b2
     return bytes(res_list)
 
-def left_rotate(word: bytes) -> bytes:
+def left_rotate(word: bytes) -> bytes:        #TODO rename to ShiftRows and modify functionality to left rotate by a fixed amount rather than by an amount of 1
     expanded_word = list(word)                # expands word into list of its component bytes
     temp = expanded_word[1:]                  # moves all but the first element to the left
     temp.append(expanded_word[0])             # adds first element back to the end
 
     return bytes(temp)                        # converts list of ints back to a bytes object
 
-def sub_word(byte: int) -> int:
+def sub_word(byte: int) -> int:               #TODO rename to SubBytes and correct function calls
     
     Sbox = (
             0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
@@ -73,7 +73,7 @@ def g(word: bytes, round_num: int) -> bytes:
     
 
 
-def key_expansion(key: bytes) -> list:
+def key_expansion(key: bytes) -> list[bytes]:
     """
     Expand a 128-bit AES key into round keys.
 
@@ -102,11 +102,48 @@ def key_expansion(key: bytes) -> list:
 
     return [b"".join(word for word in round) for round in round_keys]   # concatenates the 4 words in each round to form 11 rounds of 16-byte keys. return type is list(bytes)
 
+def AddRoundKey(state: list[list[int]], round_key: bytes) -> list[list[int]]:
+    """
+    XOR the AES state with a round key.
+
+    Performs the AddRoundKey step of the AES algorithm by
+    XORing each byte of the 4×4 state matrix with the
+    corresponding byte of the round key.
+
+    :param state: Current AES state represented as a 4×4
+                  matrix of integers in the range 0–255.
+    :type state: list[list[int]]
+    :param round_key: 16-byte round key derived from the
+                      AES key schedule.
+    :type round_key: bytes
+    :return: New AES state after the AddRoundKey operation,
+             represented as a 4×4 matrix of integers.
+    :rtype: list[list[int]]
+    """
+    temp_key_matrix = [[round_key[i] for i in range(4*j, 4*j+4)] for j in range(0,4)]       # converts the round key into a row-major matrix
+    key_matrix = transpose(temp_key_matrix)                                                 # converts matrix to column-major format
+
+    new_state = [[state[i][j] ^ key_matrix[i][j] for j in range(4)] for i in range(4)]      # bytewise XOR on corresponding elements in the matrices.
+    # an alternative is new_state = [list(bytewise_XOR(bytes(state[row]), bytes(key_matrix[row]))) for row in range(4)], but there is no need for all the additional type conversions
+
+    return new_state
+
+
 def aes_encrypt(plaintext: bytes, key: bytes) -> bytes:
     if len(key) != 16:
         raise ValueError("Key must be 16 bytes long for AES-128.")
     if len(plaintext) != 16:
         raise ValueError("Plaintext must be 16 bytes long.")
     
-    temp_matrix = [[plaintext[i] for i in range(j, j+3)] for j in range(0,3)]    # transforms the plaintext into a matrix [[b0, b1, b2,b3], [b4, ... ], ... ]
-    matrix = transpose(temp_matrix)         # transposes matrix into correct format for AES algorithm
+    temp_matrix = [[plaintext[i] for i in range(4*j, 4*j+4)] for j in range(0,4)]    # transforms the plaintext into a matrix [[b0, b1, b2,b3], [b4, ... ], ... ]
+    initial_matrix = transpose(temp_matrix)                 # transposes matrix into correct format for AES algorithm
+
+    round_keys = key_expansion(key)                 # creates the keys to be used in each round
+    
+    state = AddRoundKey(state=initial_matrix, round_key=round_keys[0])
+
+   
+
+
+
+
