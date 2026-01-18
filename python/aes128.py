@@ -168,41 +168,68 @@ def AddRoundKey(state: list[list[int]], round_key: bytes) -> list[list[int]]:
     # an alternative is new_state = [list(bytewise_XOR(bytes(state[row]), bytes(key_matrix[row]))) for row in range(4)], but there is no need for all the additional type conversions
 
     return new_state
+        
+def GF_multiply(v1: list[int], v2: list[int]) -> int:
+    """
+    Multiply two 4-byte vectors in GF(2^8) using polynomial arithmetic
+    with reduction by the AES irreducible polynomial x^8 + x^4 + x^3 + x + 1
+    (0x11b).
 
-def GF_multiply(v1: list[int], v2: list[int]):
+    Each element v1[i] is multiplied with v2[i] in GF(2^8). The four resulting
+    products are then XORed together to produce the final result.
 
-    new_vec = []
+    The multiplication is performed by:
+      1. Interpreting each byte as a polynomial over GF(2)
+      2. Computing the polynomial product
+      3. Reducing coefficients modulo 2
+      4. Reducing the result modulo 0x11b
+
+    :param v1: Length-4 list of integers (0–255) representing GF(2^8) elements
+    :type v1: list[int]
+    :param v2: Length-4 list of integers (0–255) representing GF(2^8) elements
+    :type v2: list[int]
+    :return: XOR of the four GF(2^8) products v1[i] · v2[i]
+    :rtype: int
+    """
+
+    v_res = []
     for i in range(4):
-        digits1 = list(bin(v1[i]))[2:]        # convert v1[i] into list of its digits in binary
-        digits2 = list(bin(v2[i]))[2:]        # convert v2[i] into list of its digits in binary
-        
-        exponents = []                        # contains exponents present in GF(v1[i]) * GF(v2[i])
-        for digit1 in digits1:
-            for digit2 in digits2:
-                exponents.append(int(digit1) + int(digit2))
+        n1 = v1[i]
+        n2 = v2[i]
 
-        exponent_counts = {}
-        for n in exponents:
-            if n not in exponent_counts.keys():
-                exponent_counts[n] = 1
+        x1 = list(bin(n1))[2:][::-1]
+        x2 = list(bin(n2))[2:][::-1]
+
+        gf_x1 = [i for i in range(len(x1)) if x1[i] == '1']         # recovers exponents in GF representation of binary number
+        gf_x2 = [i for i in range(len(x2)) if x2[i] == '1']         # [0,1,1,0,1,0] --> [1,2,4] (from GF(011010) = x + x^2 + x^4)
+
+        digits = []
+        for i in gf_x2:
+            for j in gf_x1:
+                digits.append(i + j)
+
+        counts = {}
+        for n in digits:                                            # counts occurrences of polynomial terms in GF representation
+            if n not in counts:
+                counts[n] = 1
             else:
-                exponent_counts[n] += 1
-        new_exponents = []                  # contains the exopnents present in GF(v1[i]) * GF(v2[i]) that occur an odd number of times
-        for exponent, val in exponent_counts:
-            if val % 2 == 1:
-                new_exponents.append(exponent)
-        bin_num_digits = [0]*16
-        for n in new_exponents:             # the 1s and 0s in new_exponents are turned into a binary number
-            bin_num_digits[n] = 1
+                counts[n] += 1
 
-        bin_num = int("".join(map(str,bin_num_digits)),base=2)
-        hex_num = int(hex(bin_num),base=16)
-        if hex_num > 0xff:
-            hex_num = hex_num ^ 0x11b
+        digits2 = [n for n in counts if counts[n] % 2 == 1]         # removes terms in GF polynomial if their exponent appears an even number of times.
 
-        new_vec.append(hex_num)
-        
-        
+        y = [0] * 16
+        for i in digits2:
+            y[i] = 1
+
+        res_str = "".join(str(n) for n in y).rstrip("0")[::-1]      # converts y into binary number, MSB first (type str). 
+        res = int(res_str, base=2)                                  # converts to int type
+
+        while res > 0x11b:                                          # reduces by 0x11b
+            res = res ^ 0x11b
+
+        v_res.append(res)
+    
+    return v_res[0] ^ v_res[1] ^ v_res[2] ^ v_res[3]                # XOR each element in v_res
 
 
 def MixColumns(matrix: list[list[int]]) -> list[list[int]]:
