@@ -217,12 +217,9 @@ def GF_multiply(v1: list[int], v2: list[int]) -> int:
 
         digits2 = [n for n in counts if counts[n] % 2 == 1]         # removes terms in GF polynomial if their exponent appears an even number of times.
 
-        y = [0] * 16
-        for i in digits2:
-            y[i] = 1
-
-        res_str = "".join(str(n) for n in y).rstrip("0")[::-1]      # converts y into binary number, MSB first (type str). 
-        res = int(res_str, base=2)                                  # converts to int type
+        res = 0
+        for e in digits2:                                           # this loop turns digits2 into a binary value (for example 00100010, if digits2 = [5,1])
+            res ^= (1 << e)                                         # 1 << e creates int whose binary representation has 1 in bit position e                                 
 
         while res >= 0x100:
             shift = res.bit_length() - 9                            # how far above x^8 we are
@@ -268,7 +265,6 @@ def MixColumns(state: list[list[int]]) -> list[list[int]]:
     result = transpose(result)
 
     return result
-
 
 def aes_encrypt(plaintext: bytes, key: bytes) -> bytes:
     """
