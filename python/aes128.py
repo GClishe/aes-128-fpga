@@ -224,16 +224,31 @@ def GF_multiply(v1: list[int], v2: list[int]) -> int:
         res_str = "".join(str(n) for n in y).rstrip("0")[::-1]      # converts y into binary number, MSB first (type str). 
         res = int(res_str, base=2)                                  # converts to int type
 
-        while res > 0x11b:                                          # reduces by 0x11b
-            res = res ^ 0x11b
-
+        while res >= 0x100:
+            shift = res.bit_length() - 9                            # how far above x^8 we are
+            res ^= 0x11b << shift
+            
         v_res.append(res)
     
     return v_res[0] ^ v_res[1] ^ v_res[2] ^ v_res[3]                # XOR each element in v_res
 
+def MixColumns(state: list[list[int]]) -> list[list[int]]:
+    """
+    Apply the AES MixColumns transformation to the state matrix.
 
-def MixColumns(matrix: list[list[int]]) -> list[list[int]]:
-    
+    MixColumns operates on each column of the 4×4 AES state independently.
+    Each column is treated as a vector of four bytes and multiplied by the
+    fixed AES MDS matrix over the finite field GF(2^8).
+
+    The input state is assumed to be a 4×4 matrix of bytes (integers in
+    the range 0–255). The output has the same shape and format.
+
+    :param state: 4×4 AES state matrix of bytes, given as a list of four rows,
+                  each containing four integers in [0, 255].
+    :type state: list[list[int]]
+    :return: New 4×4 state matrix after the MixColumns transformation.
+    :rtype: list[list[int]]
+    """
     MDS_MATRIX = [
         [0x02, 0x03, 0x01, 0x01],
         [0x01, 0x02, 0x03, 0x01],
@@ -243,14 +258,42 @@ def MixColumns(matrix: list[list[int]]) -> list[list[int]]:
 
     result = []
     # MixColumns is a column operation. To extract columns, i use rows of the tranposed matrix. 
+    matrix = transpose(state)
     for row in matrix:
         new_row = []
         for i in  range(4):
             new_row.append(GF_multiply(MDS_MATRIX[i], row)) # performs GF_multiply function on each row in the matrix. 
+        result.append(new_row)
+    
+    result = transpose(result)
 
+    return result
 
 
 def aes_encrypt(plaintext: bytes, key: bytes) -> bytes:
+    """
+    Encrypt a single 16-byte block using AES-128.
+
+    This function implements the AES-128 encryption algorithm on exactly one
+    block. The plaintext is converted into the 4×4 AES state matrix, the key
+    schedule is generated via key expansion, and the standard AES round
+    structure is applied: an initial AddRoundKey step, nine full rounds
+    (SubBytes, ShiftRows, MixColumns, AddRoundKey), followed by a final round
+    that omits MixColumns.
+
+    The function operates strictly on a single block and does not implement
+    any mode of operation (e.g., ECB, CBC, CTR) or padding.
+
+    :param plaintext: 16-byte plaintext block to be encrypted.
+    :type plaintext: bytes
+    :param key: 16-byte AES-128 encryption key.
+    :type key: bytes
+    :return: 16-byte ciphertext block resulting from AES-128 encryption.
+    :rtype: bytes
+    :raises ValueError: If the plaintext or key is not exactly 16 bytes long.
+    """
+
+
     if len(key) != 16:
         raise ValueError("Key must be 16 bytes long for AES-128.")
     if len(plaintext) != 16:
@@ -266,9 +309,21 @@ def aes_encrypt(plaintext: bytes, key: bytes) -> bytes:
     for round in range(1,10):
         state = SubBytes(state)
         state = ShiftRows(state)
+        state = MixColumns(state)
+        state = AddRoundKey(state, round_keys[round])
+    
+    # final round (round 10) does not include MixColumns step
+    state = SubBytes(state)
+    state = ShiftRows(state)    
+    state = AddRoundKey(state, round_keys[10])
 
+    # converts state matrix back to bytes object
+    state = transpose(state)
+    temp = [bytes(row) for row in state]            # converts each column of the earlier state matrix (rows of the transposed matrix) to a bytes object
+    
+    ciphertext = b"".join(row for row in temp)
 
-
+    return ciphertext
 
 
    
