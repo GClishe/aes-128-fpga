@@ -13,14 +13,39 @@ def bytewise_XOR(b1: bytes, b2: bytes) -> bytes:
     res_list = [b1_list[i] ^ b2_list[i] for i in range(len(b1))]    # XORS corresponding elements in b1, b2
     return bytes(res_list)
 
-def left_rotate(word: bytes) -> bytes:        #TODO rename to ShiftRows and modify functionality to left rotate by a fixed amount rather than by an amount of 1
-    expanded_word = list(word)                # expands word into list of its component bytes
-    temp = expanded_word[1:]                  # moves all but the first element to the left
-    temp.append(expanded_word[0])             # adds first element back to the end
+def left_shift(word: list[int], times: int = 1) -> list[int]:
 
-    return bytes(temp)                        # converts list of ints back to a bytes object
+    for _ in range(times):
+        temp = word[1:]                  # moves all but the first element to the left
+        temp.append(word[0])             # adds first element back to the end
+        word = temp
 
-def sub_word(byte: int) -> int:               #TODO rename to SubBytes and correct function calls
+    return word              # converts list of ints back to a bytes object
+
+def ShiftRows(matrix: list[list[int]]) -> list[list[int]]:
+    """
+    Apply the AES ShiftRows transformation to the state matrix.
+
+    Cyclically left-shifts each row of the 4×4 AES state by an
+    offset equal to the row index. The first row is unchanged,
+    the second row is shifted left by one byte, the third by two,
+    and the fourth by three.
+
+    :param matrix: Current AES state represented as a 4×4
+                   matrix of integers in the range 0–255.
+    :type matrix: list[list[int]]
+    :return: New AES state after the ShiftRows operation,
+             represented as a 4×4 matrix of integers.
+    :rtype: list[list[int]]
+    """
+    new_mat = []
+
+    for i,row in enumerate(matrix):
+        new_mat.append(left_shift(row, times=i))
+    
+    return new_mat
+
+def substitute_byte(byte: int) -> int:             
     
     Sbox = (
             0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
@@ -45,6 +70,23 @@ def sub_word(byte: int) -> int:               #TODO rename to SubBytes and corre
     new_val = Sbox[byte]
     return new_val     
 
+def SubBytes(matrix: list[list[int]]) -> list[list[int]]:
+    """
+    Apply the AES SubBytes transformation to the state matrix.
+
+    Replaces each byte in the 4×4 AES state matrix with its 
+    corresponding value from the AES S-box.
+
+    :param matrix: Current AES state represented as a 4×4
+                   matrix of integers in the range 0–255.
+    :type matrix: list[list[int]]
+    :return: New AES state after the SubBytes operation,
+             represented as a 4×4 matrix of integers.
+    :rtype: list[list[int]]
+    """
+
+    return [[substitute_byte(matrix[i][j]) for j in range(4)] for i in range(4)]
+
 def g(word: bytes, round_num: int) -> bytes:
     """
     Apply AES key-schedule g() transofrmation to a 4-byte word 
@@ -61,8 +103,9 @@ def g(word: bytes, round_num: int) -> bytes:
     if round_num not in range(1,11):
         raise ValueError("AES-128 uses round constants for rounds 1–10.")
     
-    rotated_word = left_rotate(word)                                        # first step is to left rotate the word
-    substituted_word = list(map(sub_word, list(rotated_word)))              # applies sub_word function to each byte in rotated_word. list(rotated_word) is an array of ints
+    temp = list(word)
+    rotated_word = left_shift(temp)                                         # first step is to left rotate the word
+    substituted_word = list(map(substitute_byte, rotated_word))             # applies substitute_byte function to each byte in rotated_word. list(rotated_word) is an array of ints
 
     RCON = [0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36]     # the first byte in the substituted word is then XOR'd with the value in the RCON table corresopnding to the round number
 
@@ -70,8 +113,6 @@ def g(word: bytes, round_num: int) -> bytes:
     substituted_word[0] = new_first_val                                     # replaces first byte with new value
     
     return bytes(substituted_word)      # converts substituted_word (list of ints) to a bytes object and returns. 
-    
-
 
 def key_expansion(key: bytes) -> list[bytes]:
     """
@@ -128,6 +169,59 @@ def AddRoundKey(state: list[list[int]], round_key: bytes) -> list[list[int]]:
 
     return new_state
 
+def GF_multiply(v1: list[int], v2: list[int]):
+
+    new_vec = []
+    for i in range(4):
+        digits1 = list(bin(v1[i]))[2:]        # convert v1[i] into list of its digits in binary
+        digits2 = list(bin(v2[i]))[2:]        # convert v2[i] into list of its digits in binary
+        
+        exponents = []                        # contains exponents present in GF(v1[i]) * GF(v2[i])
+        for digit1 in digits1:
+            for digit2 in digits2:
+                exponents.append(int(digit1) + int(digit2))
+
+        exponent_counts = {}
+        for n in exponents:
+            if n not in exponent_counts.keys():
+                exponent_counts[n] = 1
+            else:
+                exponent_counts[n] += 1
+        new_exponents = []                  # contains the exopnents present in GF(v1[i]) * GF(v2[i]) that occur an odd number of times
+        for exponent, val in exponent_counts:
+            if val % 2 == 1:
+                new_exponents.append(exponent)
+        bin_num_digits = [0]*16
+        for n in new_exponents:             # the 1s and 0s in new_exponents are turned into a binary number
+            bin_num_digits[n] = 1
+
+        bin_num = int("".join(map(str,bin_num_digits)),base=2)
+        hex_num = int(hex(bin_num),base=16)
+        if hex_num > 0xff:
+            hex_num = hex_num ^ 0x11b
+
+        new_vec.append(hex_num)
+        
+        
+
+
+def MixColumns(matrix: list[list[int]]) -> list[list[int]]:
+    
+    MDS_MATRIX = [
+        [0x02, 0x03, 0x01, 0x01],
+        [0x01, 0x02, 0x03, 0x01],
+        [0x01, 0x01, 0x02, 0x03],
+        [0x03, 0x01, 0x01, 0x02],
+    ]
+
+    result = []
+    # MixColumns is a column operation. To extract columns, i use rows of the tranposed matrix. 
+    for row in matrix:
+        new_row = []
+        for i in  range(4):
+            new_row.append(GF_multiply(MDS_MATRIX[i], row)) # performs GF_multiply function on each row in the matrix. 
+
+
 
 def aes_encrypt(plaintext: bytes, key: bytes) -> bytes:
     if len(key) != 16:
@@ -138,9 +232,17 @@ def aes_encrypt(plaintext: bytes, key: bytes) -> bytes:
     temp_matrix = [[plaintext[i] for i in range(4*j, 4*j+4)] for j in range(0,4)]    # transforms the plaintext into a matrix [[b0, b1, b2,b3], [b4, ... ], ... ]
     initial_matrix = transpose(temp_matrix)                 # transposes matrix into correct format for AES algorithm
 
-    round_keys = key_expansion(key)                 # creates the keys to be used in each round
+    round_keys = key_expansion(key)                         # creates the keys to be used in each round
     
-    state = AddRoundKey(state=initial_matrix, round_key=round_keys[0])
+    state = AddRoundKey(state=initial_matrix, round_key=round_keys[0]) # performs initial AddRoundKey step before rounds 1 thru 10
+
+    for round in range(1,10):
+        state = SubBytes(state)
+        state = ShiftRows(state)
+
+
+
+
 
    
 
