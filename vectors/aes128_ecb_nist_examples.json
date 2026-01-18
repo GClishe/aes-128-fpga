@@ -1,0 +1,27 @@
+{
+  "schema": "aes-128-vectors/v1",
+  "source": {
+    "title": "AES_Core128.pdf",
+    "notes": "Example vectors for ECB-AES128 encryption/decryption."
+  },
+  "vectors": [
+    {
+      "id": "nist_ecb_aes128_example_1",
+      "cipher": "aes-128",
+      "mode": "ecb",
+      "key_hex": "2B7E151628AED2A6ABF7158809CF4F3C",
+      "plaintext_blocks_hex": [
+        "6BC1BEE22E409F96E93D7E117393172A",
+        "AE2D8A571E03AC9C9EB76FAC45AF8E51",
+        "30C81C46A35CE411E5FBC1191A0A52EF",
+        "F69F2445DF4F9B17AD2B417BE66C3710"
+      ],
+      "ciphertext_blocks_hex": [
+        "3AD77BB40D7A3660A89ECAF32466EF97",
+        "F5D3D58503B9699DE785895A96FDBAAF",
+        "43B1CD7F598ECE23881B00E3ED030688",
+        "7B0C785E27E8AD3F8223207104725DD4"
+      ]
+    }
+  ]
+}
