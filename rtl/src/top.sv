@@ -57,3 +57,10 @@ DONE
 
 /////////////////////////////////////////////////////////////////////////////////////
 */
+
+module top(
+    input   logic        clk,
+    input   logic        btnC,
+    input   logic [15:0] sw,    // will make use of the basys3 switches at sw[15:0]
+    output  logic [15:0] led    // will also use basys3 LEDs at led[15:0]
+);
